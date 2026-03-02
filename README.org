@@ -1,0 +1,141 @@
+#+TITLE: Mojo Layer
+#+TAGS: layer|lang|mojo|lsp
+
+* Overview
+This layer provides support for the [[https://www.modular.com/mojo][Mojo]] programming language.
+
+Features:
+- Syntax highlighting for Mojo
+- LSP support via =mojo-lsp-server=
+- Project + stdlib fallback definition/reference search
+- Formatting commands based on =mojo format=
+- REPL and send-to-REPL helpers
+- Flycheck and YASnippet integration
+
+* Install
+Add =mojo= to =dotspacemacs-configuration-layers=.
+
+#+begin_src emacs-lisp
+(setq-default dotspacemacs-configuration-layers '(mojo))
+#+end_src
+
+* Prerequisites
+- Mojo installed and available as =mojo=
+- Optional: =mojo-lsp-server= from pixi
+
+LSP server detection order:
+1. =mojo-lsp-server-path=
+2. project =.pixi/envs/*/bin/mojo-lsp-server=
+3. global =~/.pixi/bin= and =~/.pixi/envs/*/bin=
+4. system =PATH=
+
+* Configuration
+| Variable                                   | Description                                       | Default                                     |
+|--------------------------------------------+---------------------------------------------------+---------------------------------------------|
+| =mojo-lsp-server-path=                     | Path to =mojo-lsp-server=                         | =nil=                                       |
+| =mojo-enable-lsp=                          | Enable LSP support                                | =t=                                         |
+| =mojo-format-on-save=                      | Format buffer on save                             | =nil=                                       |
+| =mojo-build-arguments=                     | Extra args for =mojo build=                       | =()=                                        |
+| =mojo-use-project-pixi=                    | Prefer project pixi for Mojo CLI execution        | =t=                                         |
+| =mojo-use-global-pixi=                     | Prefer global =~/.pixi= before generic PATH       | =t=                                         |
+| =mojo-global-pixi-env-priority=            | Preferred =~/.pixi/envs= names for fallback       | =("mojo" "default")=                        |
+| =mojo-pixi-no-progress=                    | Add =--no-progress= when using =pixi run=         | =nil=                                       |
+| =mojo-run-arguments=                       | Extra args for =mojo run=                         | =()=                                        |
+| =mojo-run-project-entrypoint=              | Explicit run entrypoint (relative path)           | =nil= (auto-detect)                         |
+| =mojo-run-entrypoint-candidates=           | Auto-detect candidates for project run            | =("main.mojo" "src/main.mojo" ...)=         |
+| =mojo-test-arguments=                      | Extra args for test runs (=mojo run ...=)         | =()=                                        |
+| =mojo-test-project-target=                 | Explicit project test target for =mojo run=       | =nil= (auto-detect)                         |
+| =mojo-test-target-candidates=              | Auto-detect candidates for project test target    | =("tests" "test" ...)=                      |
+| =mojo-test-add-project-include=            | Add =-I <project-root>= on test runs              | =t=                                         |
+| =mojo-clean-command=                       | Optional custom clean command                     | =nil= (uses =pixi clean= when available)    |
+| =mojo-stdlib-path=                         | Stdlib source root for fallback navigation        | =~/Documents/modular/mojo/stdlib/std=       |
+| =mojo-extra-source-paths=                  | Extra source roots for fallback navigation        | =nil=                                       |
+| =mojo-lsp-add-source-paths-as-workspaces= | Add stdlib/extra roots to active LSP workspace    | =t=                                         |
+
+Example:
+
+#+begin_src emacs-lisp
+(setq-default dotspacemacs-configuration-layers
+  '((mojo :variables
+          mojo-lsp-server-path "/custom/path/to/mojo-lsp-server"
+          mojo-stdlib-path "~/Documents/modular/mojo/stdlib/std"
+          mojo-extra-source-paths '("~/Documents/modular/mojo/stdlib/experimental")
+          mojo-lsp-add-source-paths-as-workspaces t
+          mojo-build-arguments '("--emit-llvm")
+          mojo-use-project-pixi t
+          mojo-use-global-pixi t
+          mojo-global-pixi-env-priority '("mojo" "default")
+          mojo-pixi-no-progress nil
+          mojo-run-arguments '("--target" "cpu")
+          mojo-run-project-entrypoint nil
+          mojo-test-arguments '("--warn-on-unstable-apis")
+          mojo-test-project-target nil
+          mojo-test-target-candidates '("tests" "test")
+          mojo-test-add-project-include t
+          mojo-clean-command nil
+          mojo-format-on-save t
+          mojo-enable-lsp t)))
+#+end_src
+
+When =mojo-use-project-pixi= is non-nil, command resolution is:
+1. =pixi run [--no-progress] mojo= in project root
+2. project-local =.pixi/envs/*/bin/mojo=
+3. global =~/.pixi= tool paths when =mojo-use-global-pixi= is non-nil
+
+Mojo CLI note:
+- =mojo test= was removed in late 2025. This layer runs tests via =mojo run=.
+
+* Key Bindings
+Normal state:
+
+| Key         | Description                                             |
+|-------------+---------------------------------------------------------|
+| =gd=        | Go to definition (xref/LSP, fallback to source search) |
+| =gD=        | Force source-search definition                          |
+| =gr=        | Find references                                         |
+| =SPC m ==   | Format buffer                                           |
+| =SPC m f b= | Format buffer                                           |
+| =SPC m f f= | Format chosen file                                      |
+| =SPC m f p= | Format project (=mojo format .=)                        |
+| =SPC m f r= | Format active region                                    |
+| =SPC m c == | Format buffer                                           |
+| =SPC m c c= | Build project (entrypoint-aware)                        |
+| =SPC m c b= | Build current file                                      |
+| =SPC m c f= | Build chosen file                                       |
+| =SPC m c k= | Kill active compilation                                 |
+| =SPC m c l= | Clean project                                           |
+| =SPC m c p= | Run project (entrypoint-aware)                          |
+| =SPC m c r= | Run current file                                        |
+| =SPC m c R= | Run chosen file                                         |
+| =SPC m t a= | Test DWIM (current test file or whole project target)   |
+| =SPC m t t= | Test project target (=mojo run tests -I <project>=)     |
+| =SPC m t b= | Test current file                                       |
+| =SPC m t f= | Test chosen file                                        |
+| =SPC m t r= | Re-run last test command                                |
+| =SPC m g g= | Go to definition                                        |
+| =SPC m g G= | Force fallback definition                               |
+| =SPC m g r= | Find references                                         |
+| =SPC m g R= | Text references (ripgrep)                               |
+| =SPC m h h= | Documentation                                           |
+| =SPC m h S= | Open stdlib directory                                   |
+| =SPC m h ?= | Health check                                            |
+| =SPC m r r= | Rename symbol (LSP)                                     |
+| =SPC m s b= | Send buffer to REPL                                     |
+| =SPC m s d= | Send defun to REPL                                      |
+| =SPC m s l= | Send line to REPL                                       |
+| =SPC m s r= | Send region to REPL                                     |
+| =SPC m s s= | Switch to REPL                                          |
+| =SPC m s S= | Start REPL                                              |
+| =SPC m '=   | Start REPL                                              |
+
+* Validation
+The repository includes:
+- ERT tests in =test/mojo-layer-tests.el=
+- CI batch checks in =scripts/ci-check.el=
+- GitHub Actions workflow in =.github/workflows/ci.yml=
+
+Run locally:
+
+#+begin_src sh
+emacs -Q --batch -l scripts/ci-check.el
+#+end_src

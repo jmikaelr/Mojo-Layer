@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: SIMD
+# key: simd
+# --
+SIMD[${1:DType.float32}, ${2:4}]

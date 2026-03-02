@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: __copyinit__
+# key: copyinit
+# --
+fn __copyinit__(out self, other: Self):
+    $0

@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: __moveinit__
+# key: moveinit
+# --
+fn __moveinit__(out self, owned other: Self):
+    $0

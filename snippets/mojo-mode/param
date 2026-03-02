@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: parameter
+# key: param
+# --
+[${1:T}: ${2:AnyType}]

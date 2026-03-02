@@ -1,0 +1,10 @@
+# -*- mode: snippet -*-
+# name: trait
+# key: trait
+# --
+trait ${1:Name}${2:(${3:BaseTraits})}:
+    """$4"""
+    fn ${5:method}(self${6:, ${7:args}})${8: -> ${9:ReturnType}}:
+        ...
+    
+    $0

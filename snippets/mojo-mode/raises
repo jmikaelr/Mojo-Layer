@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# name: raises
+# key: raises
+# --
+raises ${1:ErrorType}
