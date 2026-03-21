@@ -662,6 +662,8 @@ Key bindings:
 (add-to-list 'auto-mode-alist '("\\.🔥\\'" . mojo-mode))
 
 ;;;###autoload
+(add-to-list 'auto-mode-alist '("\\.mojo\\'" . mojo-mode))
+;;;###autoload
 (add-to-list 'interpreter-mode-alist '("mojo" . mojo-mode))
 
 (provide 'mojo-mode)

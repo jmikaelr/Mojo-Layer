@@ -76,6 +76,11 @@
 ;; LSP configuration
 (defun mojo/post-init-lsp-mode ()
   "Auto-start lsp-mode's built-in Mojo client in mojo buffers."
+  ;; Prevent lsp-completion-mode from adding company-capf to backends.
+  ;; We manage company backends ourselves via post-init-company.
+  (add-hook 'mojo-mode-hook
+            (lambda ()
+              (setq-local lsp-completion-provider :none)))
   (add-hook 'mojo-mode-hook #'lsp))
 
 ;; Company configuration

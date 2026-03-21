@@ -530,20 +530,24 @@ INITIAL is the initial minibuffer value."
         :context (string-trim context)))
 
 (defun mojo//definition-candidates-with-rg (symbol search-paths)
-  "Find definition candidates for SYMBOL in SEARCH-PATHS using ripgrep."
+  "Find definition candidates for SYMBOL in SEARCH-PATHS using ripgrep.
+Returns a list (possibly empty) when rg is available, or nil when rg is not."
   (when (and (executable-find "rg")
              search-paths)
     (let* ((pattern (mojo//definition-rg-pattern symbol))
            (args (append (list "--line-number"
                                "--column"
                                "--no-heading"
-                               "--color"
-                               "never"
-                               "--glob"
-                               "*.mojo"
+                               "--color" "never"
+                               "--glob" "*.mojo"
+                               "--glob" "!.pixi"
+                               "--glob" "!.git"
                                pattern)
                          search-paths))
            (lines (ignore-errors (apply #'process-lines "rg" args))))
+      ;; Return a list (may be empty) to distinguish "rg ran, no results"
+      ;; from "rg not available" — the caller uses this to skip the slow
+      ;; Elisp fallback when rg is present.
       (cl-loop for line in lines
                for matched = (string-match
                               "^\\(.*\\):\\([0-9]+\\):\\([0-9]+\\):\\(.*\\)$"
@@ -580,8 +584,13 @@ INITIAL is the initial minibuffer value."
 (defun mojo//definition-candidates (symbol)
   "Find definition candidates for SYMBOL in project and configured source paths."
   (let ((search-paths (mojo//definition-search-paths)))
-    (or (mojo//definition-candidates-with-rg symbol search-paths)
-        (mojo//definition-candidates-with-elisp symbol search-paths))))
+    ;; Use rg when available; only use the Elisp fallback when rg is not on PATH.
+    ;; Never check the rg result for truthiness — an empty list and nil are
+    ;; identical in Elisp, so `(or rg-result elisp-fallback)` wrongly recurses
+    ;; into .pixi/ whenever rg finds no matches.
+    (if (executable-find "rg")
+        (mojo//definition-candidates-with-rg symbol search-paths)
+      (mojo//definition-candidates-with-elisp symbol search-paths))))
 
 ;; Xref backend — makes fallback search work with standard M-. / xref
 (defun mojo//xref-backend () "Return mojo xref backend." 'mojo)
