@@ -202,10 +202,11 @@ ARGUMENTS is a list of CLI arguments. TARGET is an optional file/path."
                  (shell-quote-argument target))))
    " "))
 
-(defun mojo//compile-command (subcommand &optional arguments target)
+(defun mojo//compile-command (subcommand &optional arguments target directory)
   "Run `compile' with mojo SUBCOMMAND.
-ARGUMENTS and TARGET are passed to `mojo//mojo-command'."
-  (let* ((default-directory (mojo//project-root))
+ARGUMENTS and TARGET are passed to `mojo//mojo-command'.
+DIRECTORY overrides the working directory (defaults to project root)."
+  (let* ((default-directory (or directory (mojo//project-root)))
          (command (mojo//mojo-command subcommand arguments target)))
     (compile command)
     command))
@@ -309,9 +310,11 @@ INITIAL is the initial minibuffer value."
   "Build a specific Mojo FILE."
   (interactive (list (mojo//read-mojo-file "Mojo file to build: "
                                            (buffer-file-name))))
-  (mojo//compile-command "build"
-                         mojo-build-arguments
-                         (expand-file-name file)))
+  (let ((expanded (expand-file-name file)))
+    (mojo//compile-command "build"
+                           mojo-build-arguments
+                           expanded
+                           (file-name-directory expanded))))
 
 (defun mojo/run-project ()
   "Run `mojo run' from the project root."
@@ -330,9 +333,11 @@ INITIAL is the initial minibuffer value."
   "Run a specific Mojo FILE."
   (interactive (list (mojo//read-mojo-file "Mojo file to run: "
                                            (buffer-file-name))))
-  (mojo//compile-command "run"
-                         mojo-run-arguments
-                         (expand-file-name file)))
+  (let ((expanded (expand-file-name file)))
+    (mojo//compile-command "run"
+                           mojo-run-arguments
+                           expanded
+                           (file-name-directory expanded))))
 
 (defun mojo/clean-project ()
   "Run the configured clean command from the project root."
@@ -375,10 +380,12 @@ INITIAL is the initial minibuffer value."
   "Run tests in a specific Mojo FILE."
   (interactive (list (mojo//read-mojo-file "Mojo test file: "
                                            (buffer-file-name))))
-  (setq mojo--last-test-command
-        (mojo//compile-command "run"
-                               (mojo//test-run-arguments)
-                               (expand-file-name file))))
+  (let ((expanded (expand-file-name file)))
+    (setq mojo--last-test-command
+          (mojo//compile-command "run"
+                                 (mojo//test-run-arguments)
+                                 expanded
+                                 (file-name-directory expanded)))))
 
 (defun mojo//test-file-p (file)
   "Return non-nil when FILE looks like a test file."
@@ -592,6 +599,39 @@ Returns a list (possibly empty) when rg is available, or nil when rg is not."
         (mojo//definition-candidates-with-rg symbol search-paths)
       (mojo//definition-candidates-with-elisp symbol search-paths))))
 
+(defun mojo//xref-show-defs-other-window (fetcher alist)
+  "Show xref definitions via completing-read, opening in other window.
+FETCHER and ALIST are as required by `xref-show-definitions-function'."
+  (let ((xrefs (funcall fetcher)))
+    (cond
+     ((not xrefs)
+      (user-error "No definitions found"))
+     ((= (length xrefs) 1)
+      (let ((loc (xref-item-location (car xrefs))))
+        (find-file-other-window (xref-location-group loc))
+        (goto-char (xref-location-marker loc))
+        (recenter)
+        (xref-pulse-momentarily)))
+     (t
+      (let* ((entries (mapcar (lambda (xref)
+                                (let* ((loc (xref-item-location xref))
+                                       (file (xref-location-group loc))
+                                       (line (xref-location-line loc))
+                                       (summary (xref-item-summary xref)))
+                                  (cons (format "%s:%d: %s"
+                                                (abbreviate-file-name file)
+                                                (or line 0)
+                                                summary)
+                                        xref)))
+                              xrefs))
+             (selection (completing-read "Definition: " entries nil t))
+             (xref (cdr (assoc selection entries)))
+             (loc (xref-item-location xref)))
+        (find-file-other-window (xref-location-group loc))
+        (goto-char (xref-location-marker loc))
+        (recenter)
+        (xref-pulse-momentarily))))))
+
 ;; Xref backend — makes fallback search work with standard M-. / xref
 (defun mojo//xref-backend () "Return mojo xref backend." 'mojo)
 
@@ -641,7 +681,7 @@ Returns a list (possibly empty) when rg is available, or nil when rg is not."
   (let ((file (plist-get candidate :file))
         (line (plist-get candidate :line))
         (column (plist-get candidate :column)))
-    (find-file file)
+    (find-file-other-window file)
     (goto-char (point-min))
     (forward-line (max 0 (1- line)))
     (move-to-column (max 0 (1- column)))))

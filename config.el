@@ -24,6 +24,12 @@
   :group 'spacemacs
   :prefix "mojo-")
 
+(defcustom mojo-lsp-enabled t
+  "If non-nil, start LSP automatically in Mojo buffers.
+Set to nil to disable LSP (useful when mojo-lsp-server is unstable)."
+  :type 'boolean
+  :group 'mojo-layer)
+
 (defcustom mojo-format-on-save nil
   "If non-nil, format Mojo buffers on save using `mojo format`."
   :type 'boolean

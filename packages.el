@@ -55,7 +55,9 @@
       ;; Register xref backend for M-. / gd navigation (ripgrep-based search).
       (add-hook 'mojo-mode-hook
                 (lambda ()
-                  (add-hook 'xref-backend-functions #'mojo//xref-backend 90 t)))
+                  (add-hook 'xref-backend-functions #'mojo//xref-backend nil t)
+                  (setq-local xref-show-definitions-function
+                              #'mojo//xref-show-defs-other-window)))
       ;; Eldoc and imenu (built-in, no separate package entry needed)
       (add-hook 'mojo-mode-hook #'eldoc-mode)
       (add-hook 'mojo-mode-hook #'imenu-add-menubar-index)
@@ -73,14 +75,54 @@
   ;; We manage company backends ourselves via post-init-company.
   (add-hook 'mojo-mode-hook
             (lambda ()
-              (setq-local lsp-completion-provider :none)))
-  (add-hook 'mojo-mode-hook #'lsp))
+              (setq-local lsp-completion-provider :none)
+              ;; Keep only hover/eldoc, disable noisy features that
+              ;; crash the nightly mojo-lsp-server.
+              (setq-local lsp-diagnostics-provider :none)
+              (setq-local lsp-enable-symbol-highlighting nil)
+              (setq-local lsp-enable-folding nil)
+              (setq-local lsp-enable-imenu nil)
+              (setq-local lsp-signature-auto-activate nil)
+              (setq-local lsp-eldoc-enable-hover nil)
+              ;; Disable lsp-ui hover/sideline if present.
+              (setq-local lsp-ui-doc-enable nil)
+              (setq-local lsp-ui-sideline-enable nil)
+              ;; Nuke company-capf so it never sends completion
+              ;; requests to the broken LSP server.
+              (setq-local company-backends '((company-keywords)))
+              (kill-local-variable 'completion-at-point-functions)))
+  ;; After LSP initializes, strip out any hover-related eldoc functions
+  ;; it registered, since the nightly server crashes on hover+didChange.
+  (add-hook 'lsp-configure-hook
+            (lambda ()
+              (when (derived-mode-p 'mojo-mode)
+                (setq-local eldoc-documentation-functions
+                            (remq 'lsp-eldoc-function
+                                  eldoc-documentation-functions))
+                (when (fboundp 'lsp-ui-doc-mode)
+                  (lsp-ui-doc-mode -1))
+                (when (fboundp 'lsp-ui-sideline-mode)
+                  (lsp-ui-sideline-mode -1)))))
+  (add-hook 'mojo-mode-hook #'mojo//maybe-start-lsp))
+
+(defun mojo//maybe-start-lsp ()
+  "Start LSP only when enabled and the buffer is inside a project, not in stdlib."
+  (when (and mojo-lsp-enabled
+             (buffer-file-name))
+    (let ((file (buffer-file-name)))
+      (unless (and (boundp 'mojo-stdlib-path)
+                   mojo-stdlib-path
+                   (not (string-empty-p mojo-stdlib-path))
+                   (string-prefix-p
+                    (file-truename (expand-file-name mojo-stdlib-path))
+                    (file-truename file)))
+        (lsp)))))
 
 ;; Company configuration
 (defun mojo/post-init-company ()
   "Register company backends for Mojo mode."
   (spacemacs|add-company-backends
-    :backends (company-dabbrev-code company-keywords)
+    :backends (company-keywords)
     :modes mojo-mode)
   ;; Spacemacs' auto-completion layer prepends company-capf globally before
   ;; mode-specific backends apply.  company-capf errors ("invalid request")
@@ -89,7 +131,8 @@
   (add-hook 'mojo-mode-local-vars-hook
             (lambda ()
               (setq-local company-backends
-                          '((company-dabbrev-code company-keywords))))
+                          '((company-keywords)))
+              (kill-local-variable 'completion-at-point-functions))
             90))
 
 ;; Flycheck configuration
