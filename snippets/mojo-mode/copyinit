@@ -1,6 +1,6 @@
 # -*- mode: snippet -*-
-# name: __copyinit__
+# name: copy constructor
 # key: copyinit
 # --
-fn __copyinit__(out self, other: Self):
+def __init__(out self, *, copy: Self):
     $0

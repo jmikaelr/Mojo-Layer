@@ -1,6 +1,7 @@
 # -*- mode: snippet -*-
-# name: __moveinit__
+# name: move constructor
 # key: moveinit
 # --
-fn __moveinit__(out self, owned other: Self):
+def __init__(out self, *, deinit take: Self):
+    self.${1:field} = take.$1^
     $0

@@ -2,4 +2,4 @@
 # name: comptime
 # key: comptime
 # --
-comptime ${1:name} = ${2:value}
+comptime ${1:Name} = ${2:value}

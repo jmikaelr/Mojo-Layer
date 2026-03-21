@@ -3,11 +3,8 @@
 # key: struct
 # --
 @fieldwise_init
-struct ${1:Name}${2:(${3:Traits})}:
+struct ${1:Name}${2:(${3:Copyable, Movable, Writable})}:
     """$4"""
     var ${5:field}: ${6:Type}
-    
-    fn __init__(out self, $5: $6):
-        self.$5 = $5
-    
+
     $0

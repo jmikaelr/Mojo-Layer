@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: __del__ (destructor)
+# key: deinit
+# --
+def __del__(deinit self):
+    $0

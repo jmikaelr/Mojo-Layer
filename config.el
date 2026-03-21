@@ -1,8 +1,8 @@
 ;;; config.el --- Mojo layer configuration -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025
+;; Copyright (C) 2026 Richard Johnsson
 
-;; Author: Custom Implementation
+;; Author: Richard Johnsson
 ;; Keywords: mojo, languages, configuration
 
 ;; This file is not part of GNU Emacs.
@@ -24,32 +24,15 @@
   :group 'spacemacs
   :prefix "mojo-")
 
-(defcustom mojo-lsp-server-path nil
-  "Path to the mojo-lsp-server executable.
-If nil, the layer will try to auto-detect the server from:
-1. Project-local .pixi/envs/*/bin/mojo-lsp-server
-2. Global ~/.pixi (bin and envs)
-3. System PATH"
-  :type '(choice (const :tag "Auto-detect" nil)
-                 (string :tag "Custom path"))
-  :group 'mojo-layer)
-
 (defcustom mojo-format-on-save nil
   "If non-nil, format Mojo buffers on save using `mojo format`."
   :type 'boolean
   :group 'mojo-layer)
 
-(defcustom mojo-enable-lsp t
-  "If non-nil, enable LSP support for Mojo.
-This requires mojo-lsp-server to be installed."
-  :type 'boolean
-  :group 'mojo-layer)
-
-(defcustom mojo-stdlib-path (expand-file-name "~/Documents/modular/mojo/stdlib/std")
+(defcustom mojo-stdlib-path nil
   "Path to the Mojo stdlib source tree.
-When this directory exists, the layer uses it for fallback navigation and can
-add it as an LSP workspace folder so definition lookup can jump into stdlib
-sources."
+When this directory exists, the layer uses it for fallback navigation
+so definition lookup can jump into stdlib sources."
   :type '(choice (const :tag "Disabled" nil)
                  (string :tag "Path to stdlib/std"))
   :group 'mojo-layer)
@@ -58,11 +41,6 @@ sources."
   "Additional Mojo source directories for navigation.
 Each path is expanded and used by fallback definition/reference search."
   :type '(repeat string)
-  :group 'mojo-layer)
-
-(defcustom mojo-lsp-add-source-paths-as-workspaces t
-  "If non-nil, add stdlib and extra source paths as LSP workspace folders."
-  :type 'boolean
   :group 'mojo-layer)
 
 (defcustom mojo-indent-offset 4
@@ -178,7 +156,9 @@ When nil, the layer runs `pixi clean` for pixi projects when available."
                             (progn (forward-line -1)
                                    (beginning-of-line)
                                    (looking-at "\\s-*@"))))
-                 (when (looking-at "\\s-*@")
+                 ;; The loop exited either at bobp or on a non-decorator line.
+                 ;; If we're on a non-decorator line, advance to the first decorator.
+                 (unless (or (bobp) (looking-at "\\s-*@"))
                    (forward-line 1))
                  (point)))
             (e (save-excursion

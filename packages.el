@@ -1,9 +1,9 @@
 ;;; packages.el --- Mojo layer packages and configuration -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025
+;; Copyright (C) 2026 Richard Johnsson
 
-;; Author: Custom Implementation
-;; Keywords: mojo, languages, lsp
+;; Author: Richard Johnsson
+;; Keywords: mojo, languages
 
 ;; This file is not part of GNU Emacs.
 
@@ -12,9 +12,10 @@
 ;; This file defines the packages and configuration for the Mojo layer.
 ;; It includes:
 ;; - Custom mojo-mode for syntax highlighting
-;; - LSP integration with mojo-lsp-server
 ;; - Flycheck integration for syntax checking
 ;; - YASnippet snippets for Mojo
+;; - Company completion (dabbrev-code)
+;; - Projectile project support
 
 ;;; Code:
 
@@ -22,11 +23,13 @@
   '(
     ;; Core mode (local package)
     (mojo-mode :location local)
-    
-    ;; LSP support
+
+    ;; LSP (uses lsp-mode's built-in Mojo client)
     lsp-mode
-    lsp-ui
-    
+
+    ;; Completion (dabbrev-code for keyword/symbol completion without LSP)
+    company
+
     ;; Syntax checking
     flycheck
     
@@ -59,6 +62,10 @@
     (progn
       ;; Set up key bindings
       (mojo/set-leader-keys)
+      ;; Register xref backend for M-. / gd navigation (ripgrep-based search).
+      (add-hook 'mojo-mode-hook
+                (lambda ()
+                  (add-hook 'xref-backend-functions #'mojo//xref-backend 90 t)))
       ;; Evil-style navigation bindings
       (with-eval-after-load 'evil
         (evil-define-key 'normal mojo-mode-map
@@ -66,96 +73,44 @@
           (kbd "gD") #'mojo/jump-to-definition-fallback
           (kbd "gr") #'mojo/find-references)))))
 
-;; LSP mode configuration
+;; LSP configuration
 (defun mojo/post-init-lsp-mode ()
-  "Initialize lsp-mode for Mojo."
-  (add-hook 'mojo-mode-hook #'mojo//setup-lsp)
-  
-  ;; Register Mojo LSP client
-  (with-eval-after-load 'lsp-mode
-    (add-to-list 'lsp-language-id-configuration '(mojo-mode . "mojo"))
-    
-    (lsp-register-client
-     (make-lsp-client
-      :new-connection (lsp-stdio-connection #'mojo//lsp-server-command)
-      :activation-fn (lsp-activate-on "mojo")
-      :server-id 'mojo-lsp
-      :priority -1
-      :initialization-options '()
-      :notification-handlers (ht ("mojo/status" #'ignore))
-      :request-handlers (ht)
-      :action-handlers (ht)
-      :major-modes '(mojo-mode)
-      :ignore-messages nil
-      :ignore-regexps nil))))
+  "Auto-start lsp-mode's built-in Mojo client in mojo buffers."
+  (add-hook 'mojo-mode-hook #'lsp))
 
-(defun mojo//lsp-server-command ()
-  "Return the command to start the Mojo LSP server.
-Looks for mojo-lsp-server in the following locations:
-1. Custom path if mojo-lsp-server-path is set
-2. Project-local .pixi/envs/*/bin/mojo-lsp-server
-3. Global ~/.pixi (bin and envs)
-4. System PATH"
-  (let ((server-path (mojo//find-lsp-server)))
-    (if server-path
-        (list server-path)
-      (progn
-        (message "Warning: mojo-lsp-server not found. LSP features will be disabled.")
-        nil))))
-
-(defun mojo//setup-lsp ()
-  "Set up LSP for Mojo mode if enabled."
-  (when (and mojo-enable-lsp
-             (mojo//lsp-server-command))
-    (require 'lsp-mode)
-    ;; Reduce request pressure without disabling core LSP features.
-    (setq-local lsp-auto-configure nil)
-    (setq-local lsp-document-sync-method lsp--sync-full)
-    (setq-local lsp-debounce-full-sync-notifications t)
-    (setq-local lsp-debounce-full-sync-notifications-interval 2.0)
-    (setq-local lsp-idle-delay 1.0)
-    (setq-local lsp-enable-on-type-formatting nil)
-    (setq-local lsp-enable-indentation nil)
-    (setq-local lsp-signature-auto-activate nil)
-    (setq-local lsp-before-save-edits nil)
-    (setq-local lsp-modeline-code-actions-enable nil)
-    (setq-local lsp-eldoc-enable-hover t)
-    (setq-local lsp-enable-imenu nil)
-    (setq-local lsp-headerline-breadcrumb-enable nil)
-    (setq-local lsp-enable-symbol-highlighting nil)
-    (setq-local lsp-enable-links nil)
-    (setq-local lsp-lens-enable nil)
-    (setq-local lsp-semantic-tokens-enable nil)
-    (add-hook 'lsp-after-initialize-hook #'mojo/add-lsp-workspace-folders nil t)
-    (add-hook 'lsp-configure-hook #'mojo//lsp-configure nil t)
-    (when (boundp 'company-idle-delay)
-      (setq-local company-idle-delay nil)
-      (setq-local company-minimum-prefix-length 2))
-    (when (boundp 'corfu-auto)
-      (setq-local corfu-auto nil))
-    (when (boundp 'corfu-auto-prefix)
-      (setq-local corfu-auto-prefix 2))
-    (lsp)))
-
-;; LSP UI configuration
-(defun mojo/post-init-lsp-ui ()
-  "Initialize lsp-ui for Mojo."
-  (with-eval-after-load 'lsp-ui
-    (add-hook 'mojo-mode-hook #'mojo//setup-lsp-ui)))
-
-(defun mojo//lsp-configure ()
-  "Enable LSP completion for Mojo when auto-configure is disabled."
-  (when (fboundp 'lsp-completion--enable)
-    (lsp-completion--enable)))
-
-(defun mojo//setup-lsp-ui ()
-  "Disable lsp-ui noise in Mojo buffers to avoid server crashes."
-  (setq-local lsp-ui-doc-enable nil)
-  (setq-local lsp-ui-sideline-enable nil)
-  (setq-local lsp-ui-sideline-show-hover nil)
-  (setq-local lsp-ui-sideline-show-diagnostics nil))
+;; Company configuration
+(defun mojo/post-init-company ()
+  "Register company backends for Mojo mode."
+  (spacemacs|add-company-backends
+    :backends (company-dabbrev-code company-keywords)
+    :modes mojo-mode)
+  ;; Spacemacs' auto-completion layer prepends company-capf globally before
+  ;; mode-specific backends apply.  company-capf errors ("invalid request")
+  ;; in mojo buffers because there is no LSP capf source backing it.
+  ;; mojo-mode-local-vars-hook runs after all layer setup, so this wins.
+  (add-hook 'mojo-mode-local-vars-hook
+            (lambda ()
+              (setq-local company-backends
+                          '((company-dabbrev-code company-keywords))))
+            90))
 
 ;; Flycheck configuration
+
+(defun mojo//flycheck-pixi-prefix-args ()
+  "Return pixi prefix args for flycheck, or nil for plain mojo.
+When pixi is used, returns e.g. (\"run\" \"mojo\") which flycheck splices
+into the command list between the executable and \"build\"."
+  (condition-case nil
+      (pcase-let ((`(,_program . ,prefix-args) (mojo//resolve-mojo-program)))
+        prefix-args)
+    (error nil)))
+
+(defun mojo//flycheck-executable ()
+  "Return the program name for the flycheck mojo checker."
+  (condition-case nil
+      (car (mojo//resolve-mojo-program))
+    (error "mojo")))
+
 (defun mojo/post-init-flycheck ()
   "Initialize flycheck for Mojo."
   (with-eval-after-load 'flycheck
@@ -165,7 +120,12 @@ Looks for mojo-lsp-server in the following locations:
         "A Mojo syntax checker using the mojo compiler."
         ;; Compile as object to avoid requiring a top-level `main`.
         ;; Use source-original to avoid flycheck_* temp files in project dirs.
-        :command ("mojo" "build" "--emit" "object" "-o" (eval null-device) source-original)
+        ;; The (eval ...) form splices pixi prefix args (e.g. "run" "mojo")
+        ;; when using pixi, or nothing for plain mojo invocation.
+        :command ("mojo"
+                  (eval (mojo//flycheck-pixi-prefix-args))
+                  "build" "--emit" "object" "-o" (eval null-device)
+                  source-original)
         :error-patterns
         ((error line-start (file-name) ":" line ":" column ": error: " (message) line-end)
          (error line-start (file-name) ": error: " (message) line-end)
@@ -175,7 +135,14 @@ Looks for mojo-lsp-server in the following locations:
         :modes mojo-mode
         :predicate buffer-file-name)
       (add-to-list 'flycheck-checkers 'mojo))
-    
+
+    ;; Set the flycheck executable buffer-locally to the resolved program
+    ;; (e.g. "pixi" or "/path/to/mojo") so flycheck finds the right binary.
+    (add-hook 'mojo-mode-hook
+              (lambda ()
+                (setq-local flycheck-mojo-executable
+                            (mojo//flycheck-executable))))
+
     ;; Enable flycheck in mojo-mode
     (add-hook 'mojo-mode-hook #'flycheck-mode)))
 
@@ -198,16 +165,47 @@ Looks for mojo-lsp-server in the following locations:
   (add-hook 'mojo-mode-hook #'eldoc-mode))
 
 ;; Projectile configuration
+
+(defun mojo//projectile-mojo-cmd ()
+  "Return mojo command prefix for projectile, falling back to plain mojo."
+  (condition-case nil
+      (mojo//resolve-mojo-command)
+    (error "mojo")))
+
+(defun mojo//projectile-compile-command ()
+  "Return compile command for projectile."
+  (let ((cmd (mojo//projectile-mojo-cmd))
+        (entry (mojo//project-entrypoint)))
+    (format "%s build %s" cmd
+            (if entry (shell-quote-argument entry) "main.mojo"))))
+
+(defun mojo//projectile-test-command ()
+  "Return test command for projectile."
+  (let ((cmd (mojo//projectile-mojo-cmd))
+        (target (mojo//project-test-target)))
+    (if target
+        (format "%s run -I %s %s" cmd
+                (shell-quote-argument (mojo//project-root))
+                (shell-quote-argument target))
+      (format "%s run tests -I ." cmd))))
+
+(defun mojo//projectile-run-command ()
+  "Return run command for projectile."
+  (let ((cmd (mojo//projectile-mojo-cmd))
+        (entry (mojo//project-entrypoint)))
+    (format "%s run %s" cmd
+            (if entry (shell-quote-argument entry) "main.mojo"))))
+
 (defun mojo/post-init-projectile ()
   "Initialize projectile for Mojo projects."
   (with-eval-after-load 'projectile
-    ;; Register Mojo project type
-    (projectile-register-project-type 
-     'mojo 
+    ;; Register Mojo project type with dynamic commands that respect pixi.
+    (projectile-register-project-type
+     'mojo
      '(".pixi" "mojo.toml" "pyproject.toml")
-     :compile "mojo build main.mojo"
-     :test "mojo run tests -I ."
-     :run "mojo run main.mojo"
+     :compile #'mojo//projectile-compile-command
+     :test #'mojo//projectile-test-command
+     :run #'mojo//projectile-run-command
      :test-suffix "_test"
      :test-prefix "test_")))
 
@@ -220,10 +218,9 @@ Looks for mojo-lsp-server in the following locations:
 ;; Imenu configuration
 (defun mojo/post-init-imenu ()
   "Initialize imenu for Mojo."
-  (add-hook 'mojo-mode-hook 
-            (lambda ()
-              (setq imenu-create-index-function 'python-imenu-create-index)
-              (imenu-add-menubar-index))))
+  ;; mojo-mode already sets imenu-generic-expression for struct/trait/fn/def.
+  ;; Only add the menubar index here.
+  (add-hook 'mojo-mode-hook #'imenu-add-menubar-index))
 
 ;; Which-func configuration
 (defun mojo/post-init-which-func ()

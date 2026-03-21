@@ -2,8 +2,8 @@
 # name: iterator
 # key: iter
 # --
-fn __iter__(self) -> Self:
-    return self
+def __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
+    return Self.IteratorType[origin_of(self)](self)
 
-fn __next__(mut self) -> ${1:ElementType}:
+def __next__(mut self) raises StopIteration -> ${1:Self.Element}:
     $0

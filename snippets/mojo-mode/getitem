@@ -2,5 +2,5 @@
 # name: __getitem__
 # key: getitem
 # --
-fn __getitem__(self, idx: ${1:Int}) -> ${2:ReturnType}:
+def __getitem__(self, idx: ${1:Int}) -> ${2:ReturnType}:
     $0

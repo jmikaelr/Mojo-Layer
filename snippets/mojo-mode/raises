@@ -1,5 +1,6 @@
 # -*- mode: snippet -*-
-# name: raises
+# name: raises function
 # key: raises
 # --
-raises ${1:ErrorType}
+def ${1:name}(${2:args}) raises${3: -> ${4:ReturnType}}:
+    $0

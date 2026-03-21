@@ -1,9 +1,9 @@
 ;;; layers.el --- Layer dependencies for Mojo layer -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025
+;; Copyright (C) 2026 Richard Johnsson
 
-;; Author: Custom Implementation
-;; Keywords: mojo, languages, lsp
+;; Author: Richard Johnsson
+;; Keywords: mojo, languages
 
 ;; This file is not part of GNU Emacs.
 
@@ -11,7 +11,7 @@
 
 ;; This file declares the dependencies for the Mojo layer.
 ;; The Mojo layer requires:
-;; - lsp layer for language server protocol support
+;; - lsp layer for language server support
 ;; - syntax-checking layer for flycheck integration
 
 ;;; Code:

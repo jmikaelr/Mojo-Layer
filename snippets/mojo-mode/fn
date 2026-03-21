@@ -1,7 +1,7 @@
 # -*- mode: snippet -*-
-# name: fn
+# name: def (fn key)
 # key: fn
 # --
-fn ${1:name}(${2:args})${3: -> ${4:ReturnType}}:
+def ${1:name}(${2:args})${3: -> ${4:ReturnType}}:
     """$5"""
     $0

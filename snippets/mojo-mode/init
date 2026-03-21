@@ -2,5 +2,5 @@
 # name: __init__
 # key: init
 # --
-fn __init__(out self${1:, ${2:args}}):
+def __init__(out self${1:, ${2:args}}):
     $0

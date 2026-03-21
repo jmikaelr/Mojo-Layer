@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: write_to (Writable)
+# key: writable
+# --
+def write_to(self, mut writer: Some[Writer]):
+    writer.write("${1:output}", $0)

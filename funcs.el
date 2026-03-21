@@ -1,8 +1,8 @@
 ;;; funcs.el --- Helper functions for Mojo layer -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025
+;; Copyright (C) 2026 Richard Johnsson
 
-;; Author: Custom Implementation
+;; Author: Richard Johnsson
 ;; Keywords: mojo, languages, functions
 
 ;; This file is not part of GNU Emacs.
@@ -24,8 +24,6 @@
 (declare-function mojo-end-of-defun "mojo-mode")
 
 ;; Layer variables are defined in config.el and read here.
-(defvar mojo-lsp-server-path)
-(defvar mojo-enable-lsp)
 (defvar mojo-format-on-save)
 (defvar mojo-indent-offset)
 (defvar mojo-repl-arguments)
@@ -44,43 +42,6 @@
 (defvar mojo-clean-command)
 (defvar mojo-stdlib-path)
 (defvar mojo-extra-source-paths)
-(defvar mojo-lsp-add-source-paths-as-workspaces)
-
-;; LSP Server Detection
-
-(defun mojo//find-lsp-server ()
-  "Find the mojo-lsp-server executable.
-Searches in the following order:
-1. Custom path if mojo-lsp-server-path is set
-2. Project-local .pixi/envs/*/bin/mojo-lsp-server
-3. Global ~/.pixi (bin and envs)
-4. System PATH"
-  (let ((server-path nil))
-    ;; Check custom path first
-    (when (boundp 'mojo-lsp-server-path)
-      (when (and mojo-lsp-server-path
-                 (file-executable-p mojo-lsp-server-path))
-        (setq server-path mojo-lsp-server-path)))
-    
-    ;; Check project-local .pixi
-    (unless server-path
-      (setq server-path (mojo//project-pixi-tool-path "mojo-lsp-server")))
-
-    ;; Check global ~/.pixi
-    (unless server-path
-      (when mojo-use-global-pixi
-        (setq server-path (mojo//global-pixi-tool-path "mojo-lsp-server"))))
-    
-    ;; Fall back to system PATH
-    (unless server-path
-      (when (executable-find "mojo-lsp-server")
-        (setq server-path "mojo-lsp-server")))
-    
-    server-path))
-
-(defun mojo/lsp-server-available-p ()
-  "Check if the mojo-lsp-server is available."
-  (not (null (mojo//find-lsp-server))))
 
 ;; Project Management
 
@@ -121,33 +82,6 @@ Looks for .pixi directory, mojo.toml, or pyproject.toml."
     (delete-dups
      (delq nil (append (list project-root)
                        (mojo//configured-source-paths))))))
-
-(defun mojo//lsp-folder-registered-p (folder)
-  "Return non-nil when FOLDER is already in the active LSP session."
-  (when (and (fboundp 'lsp-session)
-             (fboundp 'lsp-session-folders))
-    (let ((normalized (mojo//normalize-directory folder)))
-      (cl-some (lambda (registered)
-                 (let ((registered-path (mojo//normalize-directory registered)))
-                   (and registered-path
-                        normalized
-                        (string= registered-path normalized))))
-               (ignore-errors (lsp-session-folders (lsp-session)))))))
-
-(defun mojo/add-lsp-workspace-folders ()
-  "Add configured source folders to the current LSP workspace."
-  (interactive)
-  (when (and mojo-lsp-add-source-paths-as-workspaces
-             (bound-and-true-p lsp-mode)
-             (fboundp 'lsp-workspace-folders-add))
-    (dolist (folder (mojo//configured-source-paths))
-      (unless (mojo//lsp-folder-registered-p folder)
-        (condition-case err
-            (lsp-workspace-folders-add folder)
-          (error
-           (message "Mojo: could not add workspace folder %s (%s)"
-                    folder
-                    (error-message-string err))))))))
 
 (defun mojo//file-in-project-p (file)
   "Check if FILE exists in the project root."
@@ -580,12 +514,12 @@ INITIAL is the initial minibuffer value."
 
 (defun mojo//definition-regexp (symbol)
   "Return an Elisp regexp matching definition candidates for SYMBOL."
-  (format "^\\s-*\\(?:fn\\|def\\|struct\\|trait\\|alias\\|var\\|let\\)\\s-+%s\\_>"
+  (format "^\\s-*\\(?:fn\\|def\\|struct\\|trait\\|comptime\\|var\\)\\s-+%s\\_>"
           (regexp-quote symbol)))
 
 (defun mojo//definition-rg-pattern (symbol)
   "Return a ripgrep regexp matching definition candidates for SYMBOL."
-  (format "^\\s*(fn|def|struct|trait|alias|var|let)\\s+%s\\b"
+  (format "^\\s*(fn|def|struct|trait|comptime|var)\\s+%s\\b"
           (regexp-quote symbol)))
 
 (defun mojo//make-definition-candidate (file line column context)
@@ -648,6 +582,25 @@ INITIAL is the initial minibuffer value."
   (let ((search-paths (mojo//definition-search-paths)))
     (or (mojo//definition-candidates-with-rg symbol search-paths)
         (mojo//definition-candidates-with-elisp symbol search-paths))))
+
+;; Xref backend — makes fallback search work with standard M-. / xref
+(defun mojo//xref-backend () "Return mojo xref backend." 'mojo)
+
+(cl-defmethod xref-backend-identifier-at-point ((_backend (eql 'mojo)))
+  "Return identifier at point for mojo xref backend."
+  (mojo//symbol-at-point))
+
+(cl-defmethod xref-backend-definitions ((_backend (eql 'mojo)) identifier)
+  "Return xref definitions for IDENTIFIER using project/stdlib search."
+  (let ((candidates (mojo//definition-candidates identifier)))
+    (mapcar (lambda (c)
+              (xref-make
+               (plist-get c :context)
+               (xref-make-file-location
+                (plist-get c :file)
+                (plist-get c :line)
+                (plist-get c :column))))
+            candidates)))
 
 (defun mojo//format-definition-candidate (candidate)
   "Return a display string for definition CANDIDATE."
@@ -740,15 +693,10 @@ With FORCE-FALLBACK (prefix arg), skip xref/LSP."
                                (format "*Mojo References: %s*" target-symbol))))
       (message "No reference search paths found for Mojo."))))
 
-(defun mojo/find-references (&optional force-text-search)
-  "Find references to the symbol at point.
-Use LSP when available. With FORCE-TEXT-SEARCH, use ripgrep fallback."
-  (interactive "P")
-  (if (and (not force-text-search)
-           (fboundp 'lsp-find-references)
-           (bound-and-true-p lsp-mode))
-      (lsp-find-references)
-    (mojo/search-symbol-references)))
+(defun mojo/find-references ()
+  "Find references to the symbol at point using ripgrep."
+  (interactive)
+  (mojo/search-symbol-references))
 
 (defun mojo/open-stdlib-directory ()
   "Open the configured stdlib directory in dired."
@@ -758,42 +706,48 @@ Use LSP when available. With FORCE-TEXT-SEARCH, use ripgrep fallback."
         (dired stdlib)
       (message "mojo-stdlib-path is not set to an existing directory."))))
 
+(defvar mojo--eldoc-descriptions)
+
 (defun mojo/show-documentation ()
-  "Show documentation for the symbol at point.
-Uses LSP if available."
+  "Show eldoc description for the symbol at point."
   (interactive)
-  (if (and (fboundp 'lsp-describe-thing-at-point)
-           (bound-and-true-p lsp-mode))
-      (lsp-describe-thing-at-point)
-    (message "LSP is required for documentation. Enable mojo-enable-lsp.")))
+  (let ((symbol (thing-at-point 'symbol t)))
+    (if symbol
+        (let ((desc (cdr (assoc symbol mojo--eldoc-descriptions))))
+          (if desc
+              (message "%s — %s" symbol desc)
+            (message "No documentation available for %s" symbol)))
+      (message "No symbol at point"))))
 
 (defun mojo/rename-symbol (new-name)
-  "Rename the symbol at point to NEW-NAME.
-Requires LSP to be enabled."
+  "Rename the symbol at point to NEW-NAME using query-replace."
   (interactive "sNew name: ")
-  (if (and (fboundp 'lsp-rename)
-           (bound-and-true-p lsp-mode))
-      (lsp-rename new-name)
-    (message "LSP is required for renaming. Enable mojo-enable-lsp.")))
+  (let ((old-name (thing-at-point 'symbol t)))
+    (if old-name
+        (progn
+          (goto-char (point-min))
+          (query-replace-regexp (format "\\_<%s\\_>" (regexp-quote old-name))
+                                new-name))
+      (message "No symbol at point"))))
 
 ;; Code Generation
 
 (defun mojo/insert-function-template (name)
   "Insert a Mojo function template with NAME."
   (interactive "sFunction name: ")
-  (insert (format "fn %s():\n    \"\"\"TODO: Document %s.\"\"\"\n    pass"
+  (insert (format "def %s():\n    \"\"\"TODO: Document %s.\"\"\"\n    pass"
                   name name)))
 
 (defun mojo/insert-struct-template (name)
   "Insert a Mojo struct template with NAME."
   (interactive "sStruct name: ")
-  (insert (format "@fieldwise_init\nstruct %s:\n    \"\"\"TODO: Document %s.\"\"\"\n    pass"
+  (insert (format "@fieldwise_init\nstruct %s(Copyable, Movable, Writable):\n    \"\"\"TODO: Document %s.\"\"\"\n    var field: Int"
                   name name)))
 
 (defun mojo/insert-trait-template (name)
   "Insert a Mojo trait template with NAME."
   (interactive "sTrait name: ")
-  (insert (format "trait %s:\n    \"\"\"TODO: Document %s.\"\"\"\n    ..."
+  (insert (format "trait %s:\n    \"\"\"TODO: Document %s.\"\"\"\n    def method(self): ..."
                   name name)))
 
 ;; Utility Functions
@@ -810,104 +764,54 @@ Requires LSP to be enabled."
   "Check the health of the Mojo development environment."
   (interactive)
   (let ((mojo-exe (executable-find "mojo"))
-        (lsp-server (mojo//find-lsp-server))
         (project-root (mojo//project-root))
         (source-paths (mojo//configured-source-paths)))
     (with-output-to-temp-buffer "*Mojo Health Check*"
       (princ "Mojo Development Environment Health Check\n")
       (princ "==========================================\n\n")
-      
+
       (princ "Mojo CLI: ")
       (if mojo-exe
-          (princ (format "✓ Found at %s\n" mojo-exe))
-        (princ "✗ Not found in PATH\n"))
-      
-      (princ "LSP Server: ")
-      (if lsp-server
-          (princ (format "✓ Found at %s\n" lsp-server))
-        (princ "✗ Not found\n"))
-      
+          (princ (format "Found at %s\n" mojo-exe))
+        (princ "Not found in PATH\n"))
+
       (princ "Project Root: ")
       (if project-root
-          (princ (format "✓ %s\n" project-root))
-        (princ "✗ Not in a project\n"))
-      
+          (princ (format "%s\n" project-root))
+        (princ "Not in a project\n"))
+
       (princ "\nConfiguration:\n")
-      (princ (format "  mojo-lsp-server-path: %s\n" 
-                    (or mojo-lsp-server-path "nil (auto-detect)")))
-      (princ (format "  mojo-enable-lsp: %s\n" mojo-enable-lsp))
       (princ (format "  mojo-format-on-save: %s\n" mojo-format-on-save))
       (princ (format "  mojo-indent-offset: %s\n" mojo-indent-offset))
-      (princ (format "  mojo-build-arguments: %s\n"
-                     (if mojo-build-arguments
-                         (mapconcat #'identity mojo-build-arguments " ")
-                       "nil")))
       (princ (format "  mojo-use-project-pixi: %s\n" mojo-use-project-pixi))
       (princ (format "  mojo-use-global-pixi: %s\n" mojo-use-global-pixi))
-      (princ (format "  mojo-global-pixi-env-priority: %s\n"
-                     (if mojo-global-pixi-env-priority
-                         (mapconcat #'identity mojo-global-pixi-env-priority ", ")
-                       "nil")))
-      (princ (format "  mojo-pixi-no-progress: %s\n" mojo-pixi-no-progress))
       (princ (format "  resolved-mojo-command: %s\n"
                      (condition-case err
                          (mojo//resolve-mojo-command)
                        (error
                         (format "ERROR: %s" (error-message-string err))))))
-      (princ (format "  global-pixi-mojo: %s\n"
-                     (or (mojo//global-pixi-tool-path "mojo")
-                         "not found")))
-      (princ (format "  global-pixi-lsp: %s\n"
-                     (or (mojo//global-pixi-tool-path "mojo-lsp-server")
-                         "not found")))
-      (princ (format "  mojo-run-arguments: %s\n"
-                     (if mojo-run-arguments
-                         (mapconcat #'identity mojo-run-arguments " ")
-                       "nil")))
-      (princ (format "  mojo-run-project-entrypoint: %s\n"
-                     (or mojo-run-project-entrypoint "nil (auto-detect)")))
-      (princ (format "  mojo-run-entrypoint-candidates: %s\n"
-                     (if mojo-run-entrypoint-candidates
-                         (mapconcat #'identity mojo-run-entrypoint-candidates ", ")
-                       "nil")))
-      (princ (format "  mojo-test-arguments: %s\n"
-                     (if mojo-test-arguments
-                         (mapconcat #'identity mojo-test-arguments " ")
-                       "nil")))
-      (princ (format "  mojo-test-project-target: %s\n"
-                     (or mojo-test-project-target "nil (auto-detect)")))
-      (princ (format "  mojo-test-target-candidates: %s\n"
-                     (if mojo-test-target-candidates
-                         (mapconcat #'identity mojo-test-target-candidates ", ")
-                       "nil")))
-      (princ (format "  mojo-test-add-project-include: %s\n"
-                     mojo-test-add-project-include))
-      (princ (format "  mojo-clean-command: %s\n"
-                     (or mojo-clean-command "nil (use pixi clean when available)")))
       (princ (format "  mojo-stdlib-path: %s\n"
-                    (or mojo-stdlib-path "nil")))
-      (princ (format "  mojo-lsp-add-source-paths-as-workspaces: %s\n"
-                    mojo-lsp-add-source-paths-as-workspaces))
+                     (or mojo-stdlib-path "nil")))
       (princ (format "  mojo-extra-source-paths: %s\n"
-                    (if mojo-extra-source-paths
-                        (mapconcat #'identity mojo-extra-source-paths ", ")
-                      "nil")))
+                     (if mojo-extra-source-paths
+                         (mapconcat #'identity mojo-extra-source-paths ", ")
+                       "nil")))
 
       (princ "\nResolved Source Paths:\n")
       (if source-paths
           (dolist (path source-paths)
-            (princ (format "  ✓ %s\n" path)))
-        (princ "  ✗ None (set mojo-stdlib-path or mojo-extra-source-paths)\n"))
-      
+            (princ (format "  %s\n" path)))
+        (princ "  None (set mojo-stdlib-path or mojo-extra-source-paths)\n"))
+
       (princ "\nPixi Environment:\n")
       (let ((pixi-dirs '(".pixi" "~/.pixi")))
         (dolist (dir pixi-dirs)
           (let ((expanded (expand-file-name dir)))
-            (princ (format "  %s: %s\n" 
-                          dir
-                          (if (file-directory-p expanded)
-                              "✓ Found"
-                            "✗ Not found")))))))))
+            (princ (format "  %s: %s\n"
+                           dir
+                           (if (file-directory-p expanded)
+                               "Found"
+                             "Not found")))))))))
 
 ;; Spacemacs Leader Key Bindings
 
@@ -921,7 +825,7 @@ Requires LSP to be enabled."
   (spacemacs/declare-prefix-for-mode 'mojo-mode "mr" "refactor")
   (spacemacs/declare-prefix-for-mode 'mojo-mode "ms" "send/repl")
   (spacemacs/declare-prefix-for-mode 'mojo-mode "mt" "test")
-  
+
   (spacemacs/set-leader-keys-for-major-mode 'mojo-mode
     ;; Formatting
     "=" 'mojo/format-buffer
@@ -929,7 +833,7 @@ Requires LSP to be enabled."
     "ff" 'mojo/format-file
     "fp" 'mojo/format-project
     "fr" 'mojo/format-region
-    
+
     ;; Compile and run
     "cc" 'mojo/build-project
     "c=" 'mojo/format-buffer
@@ -940,22 +844,22 @@ Requires LSP to be enabled."
     "cp" 'mojo/run-project
     "cr" 'mojo/run-current-file
     "cR" 'mojo/run-file
-    
+
     ;; Navigation
     "gg" 'mojo/jump-to-definition
     "gG" 'mojo/jump-to-definition-fallback
     "gr" 'mojo/find-references
     "gR" 'mojo/search-symbol-references
-    
+
     ;; Help
     "hh" 'mojo/show-documentation
     "hv" 'mojo/what-version
     "hS" 'mojo/open-stdlib-directory
     "h?" 'mojo/check-health
-    
+
     ;; Refactoring
     "rr" 'mojo/rename-symbol
-    
+
     ;; REPL
     "sb" 'mojo/send-buffer
     "sd" 'mojo/send-defun
@@ -964,14 +868,14 @@ Requires LSP to be enabled."
     "ss" 'mojo/switch-to-repl
     "sS" 'mojo/run-repl
     "'" 'mojo/run-repl
-    
+
     ;; Testing
     "ta" 'mojo/test-dwim
     "tt" 'mojo/test-project
     "tb" 'mojo/test-current-file
     "tf" 'mojo/test-file
     "tr" 'mojo/retest
-    
+
     ;; Templates
     "if" 'mojo/insert-function-template
     "is" 'mojo/insert-struct-template

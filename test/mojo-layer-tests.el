@@ -1,6 +1,6 @@
 ;;; mojo-layer-tests.el --- Tests for Mojo layer -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2026
+;; Copyright (C) 2026 Richard Johnsson
 
 ;;; Commentary:
 
@@ -34,8 +34,6 @@
     nil))
 
 ;; Layer variables expected by funcs.el.
-(defvar mojo-lsp-server-path nil)
-(defvar mojo-enable-lsp t)
 (defvar mojo-format-on-save nil)
 (defvar mojo-indent-offset 4)
 (defvar mojo-repl-arguments '("repl"))
@@ -54,7 +52,6 @@
 (defvar mojo-clean-command nil)
 (defvar mojo-stdlib-path nil)
 (defvar mojo-extra-source-paths nil)
-(defvar mojo-lsp-add-source-paths-as-workspaces t)
 
 (let* ((this-file (or load-file-name buffer-file-name))
        (repo-root (expand-file-name ".." (file-name-directory this-file))))
@@ -133,20 +130,6 @@
       (should (string= (mojo//resolve-mojo-command)
                        "/tmp/global\\ pixi/mojo")))))
 
-(ert-deftest mojo-test-find-lsp-server-uses-global-pixi ()
-  (let ((mojo-lsp-server-path nil)
-        (mojo-use-global-pixi t))
-    (cl-letf (((symbol-function 'mojo//project-pixi-tool-path)
-               (lambda (_tool-name) nil))
-              ((symbol-function 'mojo//global-pixi-tool-path)
-               (lambda (tool-name)
-                 (when (string= tool-name "mojo-lsp-server")
-                   "/tmp/global-pixi/mojo-lsp-server")))
-              ((symbol-function 'executable-find)
-               (lambda (_name) nil)))
-      (should (string= (mojo//find-lsp-server)
-                       "/tmp/global-pixi/mojo-lsp-server")))))
-
 (ert-deftest mojo-test-project-entrypoint-explicit ()
   (let ((root (make-temp-file "mojo-layer-" t))
         (mojo-run-project-entrypoint "src/my_main.mojo")
@@ -163,7 +146,7 @@
          (mojo-run-entrypoint-candidates '("main.mojo" "src/main.mojo")))
     (make-directory (file-name-directory entrypoint) t)
     (with-temp-file entrypoint
-      (insert "fn main():\n    pass\n"))
+      (insert "def main() raises:\n    pass\n"))
     (cl-letf (((symbol-function 'mojo//project-root) (lambda () root)))
       (should (string= (mojo//project-entrypoint) entrypoint)))))
 
@@ -175,7 +158,7 @@
          (mojo-run-project-entrypoint "main.mojo")
          (mojo-use-project-pixi nil))
     (with-temp-file entrypoint
-      (insert "fn main():\n    pass\n"))
+      (insert "def main() raises:\n    pass\n"))
     (cl-letf (((symbol-function 'compile)
                (lambda (command)
                  (setq captured command)
@@ -199,7 +182,7 @@
          (mojo-use-project-pixi nil))
     (make-directory (file-name-directory entrypoint) t)
     (with-temp-file entrypoint
-      (insert "fn main():\n    pass\n"))
+      (insert "def main() raises:\n    pass\n"))
     (cl-letf (((symbol-function 'compile)
                (lambda (command)
                  (setq captured command)

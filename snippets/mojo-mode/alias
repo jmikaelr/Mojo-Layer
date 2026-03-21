@@ -1,5 +1,5 @@
 # -*- mode: snippet -*-
-# name: alias
+# name: comptime (alias key)
 # key: alias
 # --
-alias ${1:Name} = ${2:Type}
+comptime ${1:Name} = ${2:Type}
