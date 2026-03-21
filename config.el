@@ -166,7 +166,8 @@ When nil, the layer runs `pixi clean` for pixi projects when available."
                  (point))))
         (evil-range b e)))
     
-    (define-key evil-inner-text-objects-map "f" 'mojo-inner-function)
-    (define-key evil-outer-text-objects-map "f" 'mojo-outer-function)))
+    (evil-define-key '(visual operator) mojo-mode-map
+      "if" #'mojo-inner-function
+      "af" #'mojo-outer-function)))
 
 ;;; config.el ends here

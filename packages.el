@@ -32,20 +32,10 @@
 
     ;; Syntax checking
     flycheck
-    
+
     ;; Snippets
     yasnippet
-    
-    ;; REPL integration
-    comint
-    
-    ;; Documentation
-    eldoc
-    
-    ;; Navigation
-    imenu
-    which-func
-    
+
     ;; Project support
     projectile
     )
@@ -66,6 +56,9 @@
       (add-hook 'mojo-mode-hook
                 (lambda ()
                   (add-hook 'xref-backend-functions #'mojo//xref-backend 90 t)))
+      ;; Eldoc and imenu (built-in, no separate package entry needed)
+      (add-hook 'mojo-mode-hook #'eldoc-mode)
+      (add-hook 'mojo-mode-hook #'imenu-add-menubar-index)
       ;; Evil-style navigation bindings
       (with-eval-after-load 'evil
         (evil-define-key 'normal mojo-mode-map
@@ -78,11 +71,6 @@
   "Auto-start lsp-mode's built-in Mojo client in mojo buffers."
   ;; Prevent lsp-completion-mode from adding company-capf to backends.
   ;; We manage company backends ourselves via post-init-company.
-  (with-eval-after-load 'lsp-mode
-    (setq lsp-progress-function #'ignore
-          lsp-modeline-workspace-status-enable nil
-          lsp-modeline-diagnostics-enable nil
-          lsp-modeline-code-actions-enable nil))
   (add-hook 'mojo-mode-hook
             (lambda ()
               (setq-local lsp-completion-provider :none)))
@@ -169,11 +157,6 @@ into the command list between the executable and \"build\"."
     ;; Enable yas-minor-mode in mojo-mode
     (add-hook 'mojo-mode-hook #'yas-minor-mode)))
 
-;; Eldoc configuration
-(defun mojo/post-init-eldoc ()
-  "Initialize eldoc for Mojo."
-  (add-hook 'mojo-mode-hook #'eldoc-mode))
-
 ;; Projectile configuration
 
 (defun mojo//projectile-mojo-cmd ()
@@ -218,23 +201,5 @@ into the command list between the executable and \"build\"."
      :run #'mojo//projectile-run-command
      :test-suffix "_test"
      :test-prefix "test_")))
-
-;; Comint configuration for REPL
-(defun mojo/post-init-comint ()
-  "Initialize comint for Mojo REPL."
-  ;; Nothing special needed here - handled in mojo-mode
-  )
-
-;; Imenu configuration
-(defun mojo/post-init-imenu ()
-  "Initialize imenu for Mojo."
-  ;; mojo-mode already sets imenu-generic-expression for struct/trait/fn/def.
-  ;; Only add the menubar index here.
-  (add-hook 'mojo-mode-hook #'imenu-add-menubar-index))
-
-;; Which-func configuration
-(defun mojo/post-init-which-func ()
-  "Which-func disabled — flickering mode line updates."
-  nil)
 
 ;;; packages.el ends here

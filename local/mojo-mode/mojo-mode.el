@@ -42,6 +42,8 @@
   "Number of spaces for each indentation step in Mojo mode.")
 (defvar mojo-format-on-save nil
   "Non-nil to format buffer on save using mojo format.")
+(defvar mojo-repl-buffer-name "*Mojo REPL*"
+  "Name of the Mojo REPL buffer.")
 
 ;; Group definitions
 (defgroup mojo nil
@@ -97,15 +99,6 @@
     "DeviceContext" "TargetInfo")
   "Mojo built-in types for font-locking.")
 
-(defconst mojo-decorators
-  '("@fieldwise_init" "@implicit" "@deprecated"
-    "@always_inline" "@no_inline" "@export"
-    "@parameter" "@unroll"
-    "@property" "@staticmethod" "@final"
-    "@explicit_destroy" "@doc_hidden"
-    "@test" "@benchmark")
-  "Mojo decorators for font-locking.")
-
 (defconst mojo-constants
   '("True" "False" "None" "..." "Self"
     "__name__" "__file__" "__line__"
@@ -144,7 +137,7 @@
   "Regexp to match parameter declarations in square brackets.")
 
 (defconst mojo-argument-convention-regexp
-  "\\(read\\|mut\\|out\\|deinit\\|ref\\|var\\|inout\\|borrowed\\|owned\\)\\s-+"
+  "\\_<\\(read\\|mut\\|out\\|deinit\\|ref\\|var\\|inout\\|borrowed\\|owned\\)\\s-+"
   "Regexp to match argument convention annotations.")
 
 (defconst mojo-number-regexp
@@ -479,9 +472,6 @@ With negative ARG, move backward."
 
 ;; ---- REPL ---------------------------------------------------------------
 
-(defvar mojo-repl-buffer-name "*Mojo REPL*"
-  "Name of the Mojo REPL buffer.")
-
 (defun mojo-run-repl ()
   "Run a Mojo REPL interpreter."
   (interactive)
@@ -661,8 +651,6 @@ Key bindings:
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.🔥\\'" . mojo-mode))
 
-;;;###autoload
-(add-to-list 'auto-mode-alist '("\\.mojo\\'" . mojo-mode))
 ;;;###autoload
 (add-to-list 'interpreter-mode-alist '("mojo" . mojo-mode))
 
