@@ -71,12 +71,11 @@
 ;; LSP configuration
 (defun mojo/post-init-lsp-mode ()
   "Auto-start lsp-mode's built-in Mojo client in mojo buffers."
-  ;; Prevent lsp-completion-mode from adding company-capf to backends.
-  ;; We manage company backends ourselves via post-init-company.
+  ;; Disable LSP features that crash the nightly mojo-lsp-server:
+  ;; hover, signature help, and completion (server returns "invalid request").
   (add-hook 'mojo-mode-hook
             (lambda ()
               (setq-local lsp-completion-provider :none)
-              ;; Disable hover — crashes nightly mojo-lsp-server.
               (setq-local lsp-eldoc-enable-hover nil)
               (setq-local lsp-ui-doc-enable nil)
               (setq-local lsp-ui-sideline-enable nil)
