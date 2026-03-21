@@ -78,6 +78,11 @@
   "Auto-start lsp-mode's built-in Mojo client in mojo buffers."
   ;; Prevent lsp-completion-mode from adding company-capf to backends.
   ;; We manage company backends ourselves via post-init-company.
+  (with-eval-after-load 'lsp-mode
+    (setq lsp-progress-function #'ignore
+          lsp-modeline-workspace-status-enable nil
+          lsp-modeline-diagnostics-enable nil
+          lsp-modeline-code-actions-enable nil))
   (add-hook 'mojo-mode-hook
             (lambda ()
               (setq-local lsp-completion-provider :none)))
@@ -229,7 +234,7 @@ into the command list between the executable and \"build\"."
 
 ;; Which-func configuration
 (defun mojo/post-init-which-func ()
-  "Initialize which-func for Mojo."
-  (add-hook 'mojo-mode-hook #'which-function-mode))
+  "Which-func disabled — flickering mode line updates."
+  nil)
 
 ;;; packages.el ends here
