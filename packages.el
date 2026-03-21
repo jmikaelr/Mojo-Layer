@@ -76,21 +76,11 @@
   (add-hook 'mojo-mode-hook
             (lambda ()
               (setq-local lsp-completion-provider :none)
-              ;; Keep only hover/eldoc, disable noisy features that
-              ;; crash the nightly mojo-lsp-server.
-              (setq-local lsp-diagnostics-provider :none)
-              (setq-local lsp-enable-symbol-highlighting nil)
-              (setq-local lsp-enable-folding nil)
-              (setq-local lsp-enable-imenu nil)
-              (setq-local lsp-signature-auto-activate nil)
+              ;; Disable hover — crashes nightly mojo-lsp-server.
               (setq-local lsp-eldoc-enable-hover nil)
-              ;; Disable lsp-ui hover/sideline if present.
               (setq-local lsp-ui-doc-enable nil)
               (setq-local lsp-ui-sideline-enable nil)
-              ;; Nuke company-capf so it never sends completion
-              ;; requests to the broken LSP server.
-              (setq-local company-backends '((company-keywords)))
-              (kill-local-variable 'completion-at-point-functions)))
+              (setq-local lsp-signature-auto-activate nil)))
   ;; After LSP initializes, strip out any hover-related eldoc functions
   ;; it registered, since the nightly server crashes on hover+didChange.
   (add-hook 'lsp-configure-hook
@@ -122,17 +112,16 @@
 (defun mojo/post-init-company ()
   "Register company backends for Mojo mode."
   (spacemacs|add-company-backends
-    :backends (company-keywords)
+    :backends (company-dabbrev-code company-keywords)
     :modes mojo-mode)
-  ;; Spacemacs' auto-completion layer prepends company-capf globally before
-  ;; mode-specific backends apply.  company-capf errors ("invalid request")
-  ;; in mojo buffers because there is no LSP capf source backing it.
-  ;; mojo-mode-local-vars-hook runs after all layer setup, so this wins.
+  ;; Prevent Spacemacs from re-adding company-capf (which sends broken
+  ;; completion requests to the nightly mojo-lsp-server).
+  ;; Limit dabbrev-code to current buffer only (no cross-buffer pollution).
   (add-hook 'mojo-mode-local-vars-hook
             (lambda ()
               (setq-local company-backends
-                          '((company-keywords)))
-              (kill-local-variable 'completion-at-point-functions))
+                          '((company-dabbrev-code company-keywords)))
+              (setq-local company-dabbrev-code-other-buffers nil))
             90))
 
 ;; Flycheck configuration
